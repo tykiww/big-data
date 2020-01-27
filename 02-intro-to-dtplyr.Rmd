@@ -13,10 +13,20 @@ library(fs)
 library(purrr)
 ```
 
+
+data.table is a high performance version of data.frame
+`fread` is a faster file read. Vroom is faster, but remember, it is not putting everything into memory.
+concise syntax DT[i,j,by] # kind of like javascript. It is supposed to be different.
+
+
+
 # Introduction to `dtplyr`
 
 ## `dtplyr` basics
 *Load data into R via `data.table`, and then wrap it with `dtplyr`*
+
+dtyplyr automatically translates data.table to be used with dplyr grammar.
+Lazy evaluation: only grabs a lazy evaluation first. 
 
 1. Load the `data.table`, `dplyr`, `dtplyr`, `purrr` and `fs` libraries
     ```{r, eval = eval_dtplyr}
@@ -32,21 +42,27 @@ library(purrr)
     transactions <- dir_ls("/usr/share/class/files", glob = "*.csv") %>%
        map(fread) %>%
        rbindlist()
+    
+    
+    # map from purrr.
+    # data.table needs extra work by using map.
+    # for each dir_ls item, fread it into a data.table then rbindlist it (take resulting list and bind each lists)
     ```
 
 3. Preview the data using `glimpse()`
     ```{r, eval = eval_dtplyr}
-    
+    glimpse(transactions)
     ```
 
 4. Use `lazy_dt()` to "wrap" the `transactions` variable into a new variable called `dt_transactions`
     ```{r, eval = eval_dtplyr}
-    
+    # lazily evaluated data table ..
+    (dt_transactions <- lazy_dt(transactions))
     ```
 
 5. View `dt_transactions` structure with `glimpse()`
     ```{r, eval = eval_dtplyr}
-    
+    glimpse(dt_transactions)
     ```
 
 ## Object sizes
@@ -55,68 +71,107 @@ library(purrr)
 1. Load the `lobstr` library
     ```{r, eval = eval_dtplyr}
     library(lobstr)
+    # looks at data size.
     ```
 
 2. Use `obj_size()` to obtain `transactions`'s size in memory
     ```{r, eval = eval_dtplyr}
-    
+    obj_size(transactions)
     ```
 
 3. Use `obj_size()` to obtain `dt_transactions`'s size in memory
     ```{r, eval = eval_dtplyr}
-    
+    obj_size(dt_transactions)
     ```
 
 4. Use `obj_size()` to obtain `dt_transactions` and `transactions` size in memory together
     ```{r, eval = eval_dtplyr}
-    
+    obj_size(transactions,dt_transactions) # memory together is occupying the amount of dt_transactions. dt_transactions is only referencing the original transactions without creating extra overhead.
     ```
 
 ## How `dtplyr` works
 *Under the hood view of how `dtplyr` operates `data.table` objects*
 
+avoids copying things as much as possible.
+dtyplyr by default does not update. Protects them from accidentally updating by reference.
+
+`lazy_dt()` has option that says `immutable = FALSE` to prevent dplyr from making copies.
+
 1. Use `dplyr` verbs on top of `dt_transactions` to obtain the total sales by month
     ```{r, eval = eval_dtplyr}
+    
+    # dt_transaction is a lazily evaluated data table.
+    # we are summarizing sales using the lazy dt.
     dt_transactions %>%
       group_by(date_month) %>%
-      summarise(total_sales = sum(price))
+      summarise(total_sales = sum(price)) # %>% collect() # to collect all values.
+    
+    # `_DT1`[, .(total_sales = sum(price)), keyby = .(date_month)]
+    # is what you would do in data.table to get this done.
+    # only executes on summary of the data. FAST! 
     ```
 
 2. Load the above code into a variable called `by_month`
     ```{r, eval = eval_dtplyr}
-    
+      by_month <- dt_transactions %>%
+      group_by(date_month) %>%
+      summarise(total_sales = sum(price))
     ```
 
 3. Use `show_query()` to see the `data.table` code that `by_month` actually runs
     ```{r, eval = eval_dtplyr}
-    
+    show_query(by_month) # most efficient way to use data.table code.
     ```
 
 4. Use `glimpse()` to view how `by_month`, instead of modifying the data, only adds steps that will later be executed by `data.table`
     ```{r, eval = eval_dtplyr}
-    
+    glimpse(by_month)
+    # contains reference to data.table
+    # also instructions for when this object needs to really be executed.
     ```
     
 5. Create a new column using `mutate()`
     ```{r, eval = eval_dtplyr}
+    # using mutate 
     dt_transactions %>%
-      mutate(new_field = price / 2)
+      mutate(new_field = log(price+.01))
     ```
 
 6. Use `show_query()` to see the `copy()` command being used
     ```{r, eval = eval_dtplyr}
-    
+    # showing that it is doing it on a copy. Not necessarily the original object.
+    # This is the default behavior
+        dt_transactions %>%
+      mutate(new_field = log(price+.01)) %>% 
+      show_query()
     ```
 
 7. Check to confirm that the new column *did not* persist in `dt_transactions`
     ```{r, eval = eval_dtplyr}
-    
+    dt_transactions
     ```
 
 8. Use `lazy_dt()` with the `immutable` argument set to `FALSE` to avoid the copy
     ```{r, eval = eval_dtplyr}
-    m_transactions <- lazy_dt(copy(transactions), immutable = FALSE)
+    transactions2 <- copy(transactions) # transactions is the beginning file that is read in.
+    # by copying, we are actually creating distinct objects.
+    
+    m_transactions <- lazy_dt(transactions2, immutable = FALSE) # to avoid the copy, False. 
+    # By default it is true.
+    obj_size(transactions,transactions2)
+    # see here that it has made a distinct object because size has doubled.
+    
+    
+    # When you False, then we don't have that copy command.
+    # When you True, then we have copy command.
+    
+    # Copy will make sure that it doesn't override.
+    
+    # immutable = FALSE will allow for full-benefit of data.table.
     ```
+
+Remember, the default way data.table works is it updates whenever the query is made. dtplyr allows for more R-like grammar.
+
 
     ```{r, eval = eval_dtplyr}
     m_transactions
@@ -125,17 +180,17 @@ library(purrr)
 9. Create a `new_field` column in `m_transactions` using `mutate()`
     ```{r, eval = eval_dtplyr}
     m_transactions %>% 
-      mutate(new_field = price / 2)
+      mutate(new_field = log(price + .01))
     ```
 
 10. Use `show_query()` to see that `copy()` is no longer being used
     ```{r, eval = eval_dtplyr}
-    
+    m_transactions %>% show_query()
     ```
 
 11. Inspect `m_transactions` to see that `new_field` has persisted
     ```{r, eval = eval_dtplyr}
-    
+    m_transactions
     ```
 
 ## Working with `dtplyr`
@@ -145,6 +200,7 @@ library(purrr)
     ```{r, eval = eval_dtplyr}
     by_month %>%
       as_tibble()
+    # we can have it as tibble if we want to interact the way we usually know.
     ```
 
 2. Load the `ggplot2` library
@@ -155,7 +211,7 @@ library(purrr)
 3. Use `as_tibble()` to convert before creating a line plot 
     ```{r, eval = eval_dtplyr}
     by_month %>%
-      
+      as_tibble() %>%
       ggplot() +
       geom_line(aes(date_month, total_sales))
     ```
@@ -180,6 +236,8 @@ library(purrr)
     dt_transactions %>%
       group_by(date_month, date_day) %>% 
       summarise(total_sales = sum(price)) %>%
-      
-      pivot_wider(names_from = date_day, values_from = total_sales)
+      as_tibble() %>% # Take advantage of lazy_dt. When you are ready to use it with ggplot, collect it as tibble for the moment.
+      pivot_wider(names_from = date_day, values_from = total_sales) 
+    # fast way to pivot using data.table queries
+    
     ```
