@@ -24,6 +24,13 @@ library(config)
 
 2. Use `connection_open()` to open a Database connection
     ```{r, eval = eval_db}
+    
+    # con = DBI::dbConnect(...)
+    # this will not show a live-action connection pane even though there is an active connection.
+    # so, in some cases it is a good idea to use this new package called `connections` that allow you to streamline connections using its respective package if it exists.
+    # use DBI if the package doesn't really exist for it.
+
+    # otherwise, use connection_open instead of DBI::dbConnect
     con <- connection_open(
       RPostgres::Postgres(),
       host =  "localhost",
@@ -52,20 +59,24 @@ library(config)
 
 3. Load the results from the `tbl()` command that points the table called **orders** to a variable called `orders` 
     ```{r, eval = eval_db}
-    
+    orders = tbl(con,in_schema("retail","orders")) # schema retail, table orders
     ```
     
 4. Use the `class` function to determine the object type of `orders`
     ```{r}
-    
+    class(orders)
     ```
+
+it is a bunch of things. All of these are saying that the connection is NOT some local object, but an external table.
+
+
 
 ## Under the hood 
 *Use `show_query()` to preview the SQL statement that will be sent to the database*
 
 1. Use `show_query()` to preview SQL statement that actually runs when we run `orders` as a command
     ```{r, eval = eval_db}
-    
+    show_query(orders)
     ```
     
 2. When executed, `orders` returns the first 1000 rows of the remote **orders** table
@@ -80,27 +91,28 @@ library(config)
 
 4. Easily view the resulting query by adding `show_query()` in another piped command
     ```{r, eval = eval_db}
-    
+    orders %>% show_query
     ```
 
 5. Insert `head()` in between the two statements to see how the SQL changes
     ```{r, eval = eval_db}
-    
+    orders %>% head() %>% show_query # by default, limits to the first 6
     ```
     
 6. Queries can be assigned to variables. Create a variable called `orders_head` that contains the previous query
     ```{r}
-    
+    orders_head <- orders %>% head(10)
     ```
 
 7. Use `sql_render()` and `simulate_mssql()` to see how the SQL statement changes from vendor to vendor
     ```{r, eval = eval_db}
-    
+    orders_head %>% sql_render(con = simulate_mssql() ) # simulate microsoft sql server.
+    # insulate yourself against database changes or other chagnes that may take place
     ```
 
 8. Use `explain()` to explore the query plan
     ```{r, eval = eval_db}
-    
+    explain(orders_head)
     ```
     
 ## Un-translated R commands
@@ -113,10 +125,16 @@ library(config)
       show_query()
     ```
 
+It turned mean into avg. It shows the new transaltion.. Will yield an error if not correctly identified.
+
 2. Preview how `Sys.Date()` is translated
     ```{r, eval = eval_db}
-    
+    orders %>% 
+      mutate(today = Sys.Date()) %>%  # just passes the direct value of sysdate
+      show_query()
     ```
+
+That will yield an error...
 
 3. Use PostgreSQL native commands, in this case `date`
     ```{r, eval = eval_db}
@@ -127,15 +145,21 @@ library(config)
 
 4. Run the `dplyr` code to confirm it works
     ```{r, eval = eval_db}
-    
+        orders %>%
+      mutate(today = date('now')) %>%
+      head()
     ```
+
+Will work in R. So we need to use bang bang
 
 ## Using bang-bang
 *Intro on passing unevaluated code to a dplyr verb*
 
 1. Preview how `Sys.Date()` is translated when prefixing `!!`
     ```{r, eval = eval_db}
-    
+        orders %>% 
+      mutate(today = !!Sys.Date()) %>%  # just passes the direct value of sysdate
+      show_query()
     ```
 
 2. View resulting table when `Sys.Date()` is translated when prefixing `!!`
@@ -144,6 +168,7 @@ library(config)
       mutate(today = !!Sys.Date()) %>%
       head()
     ```
+
 
 3. Disconnect from the database using `connection_close`
     ```{r}
