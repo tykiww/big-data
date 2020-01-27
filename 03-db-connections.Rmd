@@ -26,19 +26,27 @@ library(keyring)
     library(odbc)
     ```
 
-2. Use `odbcListDatasources` to list available DSNs
+2. Use `odbcListDataSources` to list available DSNs
     ```{r, eval = eval_connections}
-    
+    odbcListDataSources() # lists DSNs..
     ```
     
 3. Use `dbConnect` to connect to a database using the `odbc` function and a DSN
+
+pwd: dev_user
     ```{r, eval = eval_connections}
-    
+    con <- dbConnect(odbc::odbc(), Driver="postgresql", Server = "localhost", 
+                     Port = "5432", Database = "postgres", UID = "rstudio_dev", 
+                     PWD = rstudioapi::askForPassword("Database password:"), 
+                     BoolsAsChar = "", timeout = 10)
     ```
     
+On the side panel, you can see that we have pg_toast_temp_1, public, retail...
+Essentially, you can get additional context on what tables are available.
+
 4. Disconnect using `dbDisconnect`
     ```{r, eval = eval_connections}
-    
+    dbDisconnect(con)
     ```
 
 ## Connect with a connection string
@@ -58,7 +66,7 @@ library(keyring)
     
 2. Disconnect using `dbDisconnect`
     ```{r, eval = eval_connections}
-    
+    dbDisconnect(con)
     ```
     
 ## Secure connection details
@@ -66,17 +74,21 @@ library(keyring)
 
 1. Load the `config` package
     ```{r, eval = eval_connections}
+    # securing connection details!
+    # makes use of a yaml file and automatically loads the contents as a list.
     library(config)
     ```
     
 2. Get the current config using the `get` function and store the results in an object called `config`
     ```{r, eval = eval_connections}
-    
+    config = get() # looks for config file on path.
     ```
+
+If you have object rstudioconnect instead of default or prod, it can default to that for you.
 
 3. Use `str` to investigate the contents of `config`
     ```{r, eval = eval_connections}
-    
+    str(config)
     ```
 
 4. Connect using details provided in `config`
@@ -102,6 +114,7 @@ library(keyring)
     ```
 
 7. Store the database username and password using `keyring`. The username is `rstudio_dev` and the password is `dev_user`
+
     ```{r, eval = eval_connections}
     key_set("postgres", "username")
     key_set("postgres", "password")
@@ -125,6 +138,10 @@ library(keyring)
     ```
 
 10. The `.Renviron` file contains entries to create environment variables for `PG_USER` and `PG_PWD`. These variables can be read using `Sys.getenv()`.
+
+It is specifically calling `.Renviron` . Make sure to .gitignore that file when you commit it.
+
+
     ```{r, eval = eval_connections}
     Sys.getenv("PG_USER")
     ```
@@ -184,4 +201,20 @@ library(keyring)
     ```{r}
     dbDisconnect(con)
     ```
+
+
+# For when you don't want to have anyone messing with your credentials. Use your own!
+
+```{r}
+file.edit("/etc/odbc.ini") # open that file.
+```
+
+
+```{r}
+con <- dbConnect(odbc::odbc(), "Postgres Dev")
+dbDisconnect(con)
+```
+
+
+
 
