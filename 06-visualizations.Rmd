@@ -42,19 +42,20 @@ library(config)
 
 3. Use `tbl()` to create a pointer to the **v_orders** table
     ```{r, eval = eval_viz}
-    orders <- 
+    orders <- tbl(con, in_schema("retail","v_orders"))
+    class(orders)
     ```
 
 4. Use `collect()` bring back the aggregated results into a "pass-through" variable called `by_year`
     ```{r, eval = eval_viz}
     by_year <- orders %>%
       count(date_year) %>%
-      collect()
+      collect() # bring results of this query into R
     ```
 
 5. Preview the `by_year` variable
     ```{r, eval = eval_viz}
-    
+    class(by_year)
     ```
 
 6. Load the `ggplot2` library
@@ -71,7 +72,11 @@ library(config)
 
 8. Using the code in this section, create a single piped code set which also creates the plot
     ```{r, eval = eval_viz}
-    
+    orders %>%
+  count(date_year) %>%
+  collect() %>%
+  ggplot() +            # < Don't forget to switch to `+`
+  geom_col(aes(date_year, n)) 
     ```
 
 ## Plot in one code segment
@@ -80,7 +85,7 @@ library(config)
 1. Summarize the order totals in a new variable called `sales`
     ```{r, eval = eval_viz}
     orders %>%
-      summarise(sales = sum(order_total))
+  summarise(sales = sum(order_total))
     ```
 
 2. Summarize the order totals grouped by `date_year` in a new variable called `sales`
@@ -92,12 +97,20 @@ library(config)
     
 3. Summarize the order totals grouped by `date_year` in a new variable called `sales` and plot the results
     ```{r, eval = eval_viz}
-    
+    orders %>%
+  group_by(date_year) %>%
+  summarise(sales = sum(order_total)) %>%
+  ggplot() +
+  geom_col(aes(date_year, sales))
     ```
 
 4. Switch the calculation to reflect the average of the order sale total
     ```{r, eval = eval_viz}
-    
+    orders %>%
+  group_by(date_year) %>%
+  summarise(sales = mean(order_total)) %>%
+  ggplot() +
+  geom_col(aes(date_year, sales))
     ```
 
 ## Create a histogram
@@ -109,19 +122,35 @@ library(config)
     ```
 
 
+Showing the query for creating new bins that can be returned by histogram!
+```{r}
+orders %>% 
+  mutate(bin = !!db_bin(order_total,binwidth = 10)) %>% 
+  show_query()
+```
+
+
 2. Use the `dbplot_histogram()` to build the histogram
     ```{r, eval = eval_viz}
     orders %>%
       dbplot_histogram(order_total)
     ```
 
+Really good because we don't have to directly pull data and bring it to local memory. We can just directly query it!
+
 3. Adjust the `binwidth` to 10
     ```{r, eval = eval_viz}
-    
+    orders %>%
+  dbplot_histogram(order_total, binwidth = 10) + theme_bw()
     ```
 
 ## Raster plot
 *Use `dbplot`'s raster graph*
+
+Usually, trends and scatterplots are just way too big. 
+Instead of trying to create a scatterplot that creates millions of records.
+
+It shows the density of points accross variables. 
 
 1. Use a `dbplot_raster()` to visualize `order_qty` versus `order_total`
     ```{r, eval = eval_viz}
@@ -129,18 +158,37 @@ library(config)
       dbplot_raster(order_qty, order_total)
     ```
 
+The colors are a heat map for density.
+Plotting up an aggregation.
+
+
 2. Change the plot's resolution to 10
     ```{r, eval = eval_viz}
-    
+        orders %>%
+      dbplot_raster(order_qty, order_total, resolution = 10)
     ```
 
 ## Using the `compute` functions
 
-1. Use the `db_compute_raster()` function to get the underlying results that feed the plot
+Combination of both approaches!! 
+Histogram & raster.
+Utilize summarization in density form.
+Summarize, return results, aggregate, end.
+
+We probably won't want this behavior with map data like this..
+```{r}
+orders %>% dbplot_raster(customer_lon,customer_lat, resolution = 10)
+```
+
+
+1. Instead use the `db_compute_raster2()` function to get underlying results that feed the plot
     ```{r, eval = eval_viz}
     locations <- orders %>%
       db_compute_raster2(customer_lon, customer_lat, resolution = 10)
     ```
+
+What's the difference between compute_raster and compute_raster2
+It gives me both boundaries for longditude and lattitude.
 
 2. Preview the `locations` variable
     ```{r, eval = eval_viz}
@@ -214,6 +262,9 @@ locations %>%
       popup = ~paste0("<p>No of orders: ",  `n()`,"</p>")
     )
 ```
+
+If I have other information such as area name I can also include it in the popup arguments.
+
 
 9. Disconnect from the database using `connection_close`
     ```{r}
