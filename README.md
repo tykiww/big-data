@@ -221,3 +221,14 @@ Interested? See registration information here: [RStudio Conference 2020](https:/
 ![](https://i.creativecommons.org/l/by/4.0/88x31.png) This work is
 licensed under a [Creative Commons Attribution 4.0 International
 License](https://creativecommons.org/licenses/by/4.0/).
+
+
+
+
+<hr>
+
+# Other Conference Notes:
+
+- Attacking Discrimination with ML: https://research.google.com/bigpicture/attacking-discrimination-in-ml/
+- Tf Embeddings: https://projector.tensorflow.org/
+- Understanding Embeddings: https://towardsdatascience.com/neural-network-embeddings-explained-4d028e6f0526
